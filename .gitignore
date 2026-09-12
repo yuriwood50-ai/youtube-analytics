@@ -11,3 +11,7 @@ venv/
 
 # Vercel CLI 연결 정보
 .vercel/
+
+.vercel
+.env*
+!.env.sample
