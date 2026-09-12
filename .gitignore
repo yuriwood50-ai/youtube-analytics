@@ -1,0 +1,13 @@
+# 비밀 값 — 절대 커밋하지 않음 (.env.sample 양식만 커밋)
+.env
+.env.*
+!.env.sample
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Vercel CLI 연결 정보
+.vercel/

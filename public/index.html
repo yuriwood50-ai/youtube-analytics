@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>YouTube 분석 대시보드</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true"></span>YouTube 분석 대시보드</div>
+  <nav class="tabs" role="tablist" aria-label="분석 방식">
+    <button type="button" role="tab" data-mode="channel" aria-selected="true">채널 분석</button>
+    <button type="button" role="tab" data-mode="search" aria-selected="false">키워드 검색</button>
+  </nav>
+  <div class="status">
+    <span id="keyStatus" class="pill">서버 확인 중…</span>
+    <span id="quota" class="pill" title="서버를 켠 뒤 YouTube API에 실제로 보낸 요청의 할당량 합계입니다. 하루 기본 한도는 10,000입니다.">할당량 0 사용</span>
+  </div>
+</header>
+
+<main>
+  <section class="card query">
+    <form id="form-channel" data-mode="channel" autocomplete="off">
+      <label class="field grow">
+        <span>채널</span>
+        <input name="q" type="text" required maxlength="200" placeholder="@핸들, 채널 URL, 채널 ID(UC…) 또는 영상 URL">
+      </label>
+      <label class="field">
+        <span>최근 영상</span>
+        <select name="max">
+          <option value="50">50개</option>
+          <option value="100" selected>100개</option>
+          <option value="200">200개</option>
+        </select>
+      </label>
+      <button class="primary" type="submit">분석하기</button>
+    </form>
+
+    <form id="form-search" data-mode="search" autocomplete="off" hidden>
+      <label class="field grow">
+        <span>검색어</span>
+        <input name="q" type="text" required maxlength="200" placeholder="예: 캠핑 브이로그">
+      </label>
+      <label class="field">
+        <span>정렬</span>
+        <select name="order">
+          <option value="relevance">관련성</option>
+          <option value="viewCount">조회수</option>
+          <option value="date">최신</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>게시 기간</span>
+        <select name="days">
+          <option value="0">전체</option>
+          <option value="7">최근 7일</option>
+          <option value="30" selected>최근 30일</option>
+          <option value="90">최근 90일</option>
+          <option value="365">최근 1년</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>지역</span>
+        <select name="region">
+          <option value="KR" selected>한국</option>
+          <option value="US">미국</option>
+          <option value="JP">일본</option>
+          <option value="">전체</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>개수</span>
+        <select name="max">
+          <option value="50">50개 · 할당량 100</option>
+          <option value="100">100개 · 할당량 200</option>
+        </select>
+      </label>
+      <button class="primary" type="submit">검색하기</button>
+    </form>
+
+    <div class="query-foot">
+      <div id="recent" class="recent" aria-label="최근 조회"></div>
+      <p class="hint" data-mode="channel">채널 분석은 가벼워요 (할당량 약 3~10).</p>
+      <p class="hint" data-mode="search" hidden>검색은 50개당 할당량 100을 씁니다. 하루 기본 한도는 10,000.</p>
+    </div>
+    <p id="message" class="message" role="alert" hidden></p>
+  </section>
+
+  <section id="empty" class="card empty">
+    <h2>무엇을 볼 수 있나요?</h2>
+    <ul>
+      <li><b>채널 분석</b> — 채널의 최근 영상을 최대 200개까지 모아 조회수 추이, 참여율, 잘 되는 요일·시간·길이·태그를 봅니다.</li>
+      <li><b>키워드 검색</b> — 키워드로 뜨는 영상과 채널을 모아 어떤 영상이 반응이 좋은지 비교합니다.</li>
+      <li>필터(기간·길이·제목 검색)는 아래의 모든 숫자·차트·표에 한 번에 적용됩니다.</li>
+      <li>영상 목록은 열 제목을 눌러 정렬하고, CSV로 내보내 엑셀에서 이어서 볼 수 있어요.</li>
+    </ul>
+    <p class="muted">🔒 API 키는 이 컴퓨터의 서버(.env)에만 있고 브라우저로는 전달되지 않습니다.</p>
+  </section>
+
+  <div id="report" hidden>
+    <section id="header" class="card header"></section>
+
+    <section class="card filters" aria-label="필터 — 아래 모든 지표·차트·표에 적용">
+      <div class="seg" role="group" aria-label="게시 기간" data-filter="period">
+        <span class="seg-label">기간</span>
+        <button type="button" data-value="all" aria-pressed="true">전체</button>
+        <button type="button" data-value="30" aria-pressed="false">30일</button>
+        <button type="button" data-value="90" aria-pressed="false">90일</button>
+        <button type="button" data-value="180" aria-pressed="false">180일</button>
+        <button type="button" data-value="365" aria-pressed="false">1년</button>
+      </div>
+      <div class="seg" role="group" aria-label="영상 길이" data-filter="length">
+        <span class="seg-label">길이</span>
+        <button type="button" data-value="all" aria-pressed="true">전체</button>
+        <button type="button" data-value="short" aria-pressed="false" title="쇼츠로 추정">3분 이하</button>
+        <button type="button" data-value="long" aria-pressed="false">3분 초과</button>
+      </div>
+      <input id="filterText" class="filter-text" type="search" placeholder="제목·태그에서 찾기" aria-label="제목·태그에서 찾기">
+      <span id="filterCount" class="count"></span>
+      <button id="exportCsv" type="button" class="ghost">CSV 내보내기</button>
+    </section>
+
+    <section id="kpis" class="kpis" aria-label="핵심 지표"></section>
+    <p id="noMatch" class="card empty-small" hidden>조건에 맞는 영상이 없어요. 필터를 넓혀 보세요.</p>
+
+    <section id="charts" class="charts">
+      <article class="card chart-card wide" id="card-trend">
+        <header class="chart-head">
+          <div>
+            <h3>영상별 추이</h3>
+            <p class="sub">게시일 순 · 점 하나가 영상 하나 · 점을 누르면 YouTube에서 열려요</p>
+          </div>
+          <div class="chart-tools">
+            <select id="trendMetric" aria-label="표시할 지표">
+              <option value="views">조회수</option>
+              <option value="viewsPerDay">일평균 조회수</option>
+              <option value="likes">좋아요</option>
+              <option value="comments">댓글</option>
+              <option value="engagement">참여율</option>
+            </select>
+            <label class="check"><input type="checkbox" id="trendLog"> 로그 축</label>
+          </div>
+        </header>
+        <div class="legend"></div>
+        <div class="chart-body"></div>
+        <p class="insight"></p>
+      </article>
+
+      <article class="card chart-card" id="card-scatter">
+        <header class="chart-head">
+          <div>
+            <h3>조회수 × 참여율</h3>
+            <p class="sub">가로·세로 기준선 = 각각의 중앙값 · 오른쪽 위일수록 많이 보고 반응도 큼</p>
+          </div>
+        </header>
+        <div class="legend"></div>
+        <div class="chart-body"></div>
+        <p class="insight"></p>
+      </article>
+
+      <article class="card chart-card" id="card-weekday">
+        <header class="chart-head">
+          <div>
+            <h3>요일별 조회수</h3>
+            <p class="sub">게시 요일(한국 시간)별 중앙값 조회수 · 아래 숫자는 영상 수</p>
+          </div>
+          <button type="button" class="ghost small" data-toggle-table>표</button>
+        </header>
+        <div class="legend"></div>
+        <div class="chart-body"></div>
+        <div class="chart-table" hidden></div>
+        <p class="insight"></p>
+      </article>
+
+      <article class="card chart-card" id="card-heatmap">
+        <header class="chart-head">
+          <div>
+            <h3>업로드 시간표</h3>
+            <p class="sub">요일 × 시간(한국 시간)별 업로드 수</p>
+          </div>
+          <button type="button" class="ghost small" data-toggle-table>표</button>
+        </header>
+        <div class="legend"></div>
+        <div class="chart-body"></div>
+        <div class="chart-table" hidden></div>
+        <p class="insight"></p>
+      </article>
+
+      <article class="card chart-card" id="card-duration">
+        <header class="chart-head">
+          <div>
+            <h3>영상 길이별 조회수</h3>
+            <p class="sub">길이 구간별 중앙값 조회수 · 아래 숫자는 영상 수</p>
+          </div>
+          <button type="button" class="ghost small" data-toggle-table>표</button>
+        </header>
+        <div class="legend"></div>
+        <div class="chart-body"></div>
+        <div class="chart-table" hidden></div>
+        <p class="insight"></p>
+      </article>
+
+      <article class="card chart-card" id="card-tags">
+        <header class="chart-head">
+          <div>
+            <h3>자주 쓰는 태그</h3>
+            <p class="sub">2개 이상 영상에 쓰인 태그 상위 10 · 막대 = 중앙값 조회수</p>
+          </div>
+          <button type="button" class="ghost small" data-toggle-table>표</button>
+        </header>
+        <div class="legend"></div>
+        <div class="chart-body"></div>
+        <div class="chart-table" hidden></div>
+        <p class="insight"></p>
+      </article>
+
+      <article class="card chart-card search-only" id="card-channels">
+        <header class="chart-head">
+          <div>
+            <h3>채널별 조회수</h3>
+            <p class="sub">검색 결과 속 채널별 조회수 합계 상위 10</p>
+          </div>
+          <button type="button" class="ghost small" data-toggle-table>표</button>
+        </header>
+        <div class="legend"></div>
+        <div class="chart-body"></div>
+        <div class="chart-table" hidden></div>
+        <p class="insight"></p>
+      </article>
+    </section>
+
+    <section class="card table-card">
+      <header class="chart-head">
+        <div>
+          <h3>영상 목록</h3>
+          <p class="sub">열 제목을 누르면 정렬 · 중앙값 대비 2배 이상은 ▲ 표시 · 필터가 적용된 영상만 보여요</p>
+        </div>
+      </header>
+      <div class="table-wrap">
+        <table id="videoTable" class="data"><thead></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <details class="card glossary">
+      <summary>지표 설명</summary>
+      <dl>
+        <dt>중앙값 조회수</dt><dd>영상들을 조회수 순으로 줄 세웠을 때 가운데 값. 한두 개의 대박 영상에 휘둘리는 평균보다 “보통 영상”의 성과를 잘 보여 줍니다.</dd>
+        <dt>참여율</dt><dd>(좋아요 + 댓글) ÷ 조회수. 본 사람 중 얼마나 반응했는지. 좋아요·댓글이 비공개면 계산에서 빠집니다.</dd>
+        <dt>일평균 조회수</dt><dd>조회수 ÷ 게시 후 지난 일수. 오래된 영상과 최근 영상을 비교할 때 참고하세요.</dd>
+        <dt>구독자 대비</dt><dd>조회수 ÷ 채널 구독자 수. 100%를 넘으면 구독자 밖으로도 퍼진 영상입니다.</dd>
+        <dt>중앙값 대비</dt><dd>영상 조회수 ÷ 현재 필터의 중앙값 조회수. 2배 이상이면 평소보다 잘 된 영상입니다.</dd>
+        <dt>3분 이하</dt><dd>YouTube API는 쇼츠 여부를 알려 주지 않아, 3분 이하 영상을 쇼츠로 추정합니다.</dd>
+        <dt>시간 기준</dt><dd>요일·시간은 모두 한국 시간(KST) 기준입니다.</dd>
+      </dl>
+    </details>
+  </div>
+</main>
+
+<div id="tooltip" class="tooltip" hidden></div>
+</body>
+</html>

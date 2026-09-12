@@ -1,0 +1,9 @@
+# Vercel 에는 아래 허용 목록의 파일만 올라간다. (.env 등 나머지는 절대 업로드되지 않음)
+/*
+!/api
+!/public
+!/dashboard_api.py
+!/youtube_api.py
+!/requirements.txt
+!/vercel.json
+!/.python-version
